@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Leaves – Smart Roster Management System</title>
+    <link rel="stylesheet" href="css/style.css" />
+</head>
+
+<body>
+    <aside class="sidebar" id="sidebar"></aside>
+    <div class="main-wrapper">
+        <header class="topbar">
+            <div>
+                <div class="topbar-title">Leave Management</div>
+                <div class="topbar-subtitle">Track and manage employee leaves</div>
+            </div>
+            <div class="topbar-actions">
+                <select class="form-control form-select" id="monthFilter" style="width:130px"></select>
+                <select class="form-control form-select" id="yearFilter" style="width:90px"></select>
+                <button class="btn btn-primary" id="addLeaveBtn">+ Add Leave</button>
+            </div>
+        </header>
+        <div class="content">
+            <div class="card">
+                <div class="card-header">
+                    <h6>🏖️ Leave Records</h6><span class="badge badge-primary" id="countBadge">0</span>
+                </div>
+                <div class="card-body" style="padding:0">
+                    <div class="table-container">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Employee</th>
+                                    <th>Leave Type</th>
+                                    <th>From</th>
+                                    <th>To</th>
+                                    <th>Days</th>
+                                    <th>Reason</th>
+                                    <th>Status</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="leaveTable">
+                                <tr>
+                                    <td colspan="8" class="text-center text-muted" style="padding:32px">Loading...</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Leave Modal -->
+    <div class="modal-overlay" id="leaveModal">
+        <div class="modal">
+            <div class="modal-header">
+                <h5>Add Leave</h5>
+                <button class="close-btn" onclick="closeModal()">✕</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label class="form-label">Employee *</label>
+                    <select class="form-control form-select" id="fEmployee"></select>
+                </div>
+                <div class="grid-2">
+                    <div class="form-group">
+                        <label class="form-label">Leave Type</label>
+                        <select class="form-control form-select" id="fType">
+                            <option value="PL">PL – Planned Leave</option>
+                            <option value="SL">SL – Sick Leave</option>
+                            <option value="CL">CL – Casual Leave</option>
+                            <option value="LWP">LWP – Leave Without Pay</option>
+                            <option value="CO">CO – Compensatory Off</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Status</label>
+                        <select class="form-control form-select" id="fStatus">
+                            <option value="approved">Approved</option>
+                            <option value="pending">Pending</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="grid-2">
+                    <div class="form-group">
+                        <label class="form-label">From Date *</label>
+                        <input type="date" class="form-control" id="fFrom" />
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">To Date *</label>
+                        <input type="date" class="form-control" id="fTo" />
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Reason</label>
+                    <input type="text" class="form-control" id="fReason" placeholder="Optional reason..." />
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+                <button class="btn btn-primary" id="saveLeaveBtn">Save Leave</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/api.js"></script>
+    <script>
+        let leaves = [], employees = [];
+        const { year: curYear, month: curMonth } = getCurrentMonthYear();
+
+        // Setup pickers
+        const monthFilter = document.getElementById('monthFilter');
+        const yearFilter = document.getElementById('yearFilter');
+        MONTH_NAMES.slice(1).forEach((m, i) => {
+            const opt = document.createElement('option');
+            opt.value = i + 1; opt.textContent = m;
+            if (i + 1 === curMonth) opt.selected = true;
+            monthFilter.appendChild(opt);
+        });
+        for (let y = curYear - 2; y <= curYear + 2; y++) {
+            const opt = document.createElement('option');
+            opt.value = y; opt.textContent = y;
+            if (y === curYear) opt.selected = true;
+            yearFilter.appendChild(opt);
+        }
+
+        async function loadData() {
+            employees = (await API.getEmployees({ isActive: true })).data;
+            const fEmp = document.getElementById('fEmployee');
+            fEmp.innerHTML = employees.map(e => `<option value="${e._id}">${e.name} (${e.empId})</option>`).join('');
+            await loadLeaves();
+        }
+
+        async function loadLeaves() {
+            const month = monthFilter.value;
+            const year = yearFilter.value;
+            leaves = (await API.getLeaves({ month, year })).data;
+            renderTable(leaves);
+        }
+
+        function renderTable(data) {
+            document.getElementById('countBadge').textContent = data.length;
+            const tbody = document.getElementById('leaveTable');
+            if (!data.length) { tbody.innerHTML = `<tr><td colspan="8"><div class="empty-state"><div class="icon">🏖️</div><h5>No leave records found</h5></div></td></tr>`; return; }
+            tbody.innerHTML = data.map(l => {
+                const days = Math.ceil((new Date(l.endDate) - new Date(l.startDate)) / 86400000) + 1;
+                return `<tr>
+          <td><div class="d-flex align-center gap-8"><div class="avatar" style="width:26px;height:26px;font-size:10px">${getInitials(l.employee?.name || '?')}</div>${l.employee?.name || 'Unknown'}</div></td>
+          <td><span class="badge badge-warning">${l.leaveType}</span></td>
+          <td>${formatDate(l.startDate)}</td>
+          <td>${formatDate(l.endDate)}</td>
+          <td><strong>${days} day${days > 1 ? 's' : ''}</strong></td>
+          <td class="text-muted">${l.reason || '–'}</td>
+          <td><span class="badge ${l.status === 'approved' ? 'badge-success' : l.status === 'pending' ? 'badge-warning' : 'badge-danger'}">${l.status}</span></td>
+          <td>
+            <button class="btn btn-sm btn-secondary" onclick="approveLeave('${l._id}','${l.status === 'approved' ? 'pending' : 'approved'}')">
+              ${l.status === 'approved' ? '⏸️' : '✅'}
+            </button>
+            <button class="btn btn-sm btn-danger" onclick="deleteLeave('${l._id}')">🗑️</button>
+          </td>
+        </tr>`;
+            }).join('');
+        }
+
+        function openModal() { document.getElementById('leaveModal').classList.add('open'); }
+        function closeModal() { document.getElementById('leaveModal').classList.remove('open'); }
+
+        document.getElementById('addLeaveBtn').addEventListener('click', openModal);
+        monthFilter.addEventListener('change', loadLeaves);
+        yearFilter.addEventListener('change', loadLeaves);
+
+        document.getElementById('saveLeaveBtn').addEventListener('click', async () => {
+            const payload = {
+                employee: document.getElementById('fEmployee').value,
+                leaveType: document.getElementById('fType').value,
+                status: document.getElementById('fStatus').value,
+                startDate: document.getElementById('fFrom').value,
+                endDate: document.getElementById('fTo').value,
+                reason: document.getElementById('fReason').value
+            };
+            if (!payload.employee || !payload.startDate || !payload.endDate) { showToast('Fill required fields', 'error'); return; }
+            try {
+                await API.createLeave(payload);
+                showToast('Leave added', 'success');
+                closeModal();
+                await loadLeaves();
+            } catch (e) { }
+        });
+
+        async function approveLeave(id, newStatus) {
+            await API.updateLeave(id, { status: newStatus });
+            showToast(`Leave ${newStatus}`, 'success');
+            await loadLeaves();
+        }
+
+        async function deleteLeave(id) {
+            if (!confirm('Delete this leave?')) return;
+            await API.deleteLeave(id);
+            showToast('Leave deleted');
+            await loadLeaves();
+        }
+
+        loadData();
+    </script>
+</body>
+
+</html>

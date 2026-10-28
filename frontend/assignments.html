@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Assignments – Smart Roster Management System</title>
+    <link rel="stylesheet" href="css/style.css" />
+</head>
+
+<body>
+    <aside class="sidebar" id="sidebar"></aside>
+    <div class="main-wrapper">
+        <header class="topbar">
+            <div>
+                <div class="topbar-title">Assignments</div>
+                <div class="topbar-subtitle">Link employees to brands and processes</div>
+            </div>
+            <div class="topbar-actions"><button class="btn btn-primary" id="addBtn">+ Add Assignment</button></div>
+        </header>
+        <div class="content">
+            <div class="search-bar">
+                <div class="search-input-wrap">
+                    <span class="icon">🔍</span>
+                    <input type="text" class="form-control" id="searchInput"
+                        placeholder="Search by employee or brand..." />
+                </div>
+                <select class="form-control form-select" id="typeFilter" style="width:160px">
+                    <option value="">All Types</option>
+                    <option value="dedicated">Dedicated</option>
+                    <option value="shared">Shared</option>
+                </select>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <h6>🔗 Assignment List <span class="badge badge-primary" id="countBadge">0</span></h6>
+                </div>
+                <div class="card-body" style="padding:0">
+                    <div class="table-container">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Employee</th>
+                                    <th>Brand</th>
+                                    <th>Processes</th>
+                                    <th>Type</th>
+                                    <th>Primary</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="assignTable">
+                                <tr>
+                                    <td colspan="6" class="text-center text-muted" style="padding:32px">Loading...</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="assignModal">
+        <div class="modal">
+            <div class="modal-header">
+                <h5>Add Assignment</h5><button class="close-btn" onclick="closeModal()">✕</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group"><label class="form-label">Employee *</label><select
+                        class="form-control form-select" id="fEmp"></select></div>
+                <div class="form-group"><label class="form-label">Brand *</label><select
+                        class="form-control form-select" id="fBrand"></select></div>
+                <div class="form-group">
+                    <label class="form-label">Processes</label>
+                    <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:4px" id="processCheckboxes">
+                        ${['CS','ACC','NDR','RTO','PREP','SOCIAL'].map(p => `
+                        <label
+                            style="display:flex;align-items:center;gap:5px;font-size:13px;cursor:pointer;background:var(--bg);padding:5px 10px;border-radius:6px;border:1.5px solid var(--border)">
+                            <input type="checkbox" class="process-cb" value="${p}" /> ${p}
+                        </label>`).join('')}
+                    </div>
+                </div>
+                <div class="grid-2">
+                    <div class="form-group">
+                        <label class="form-label">Assignment Type</label>
+                        <select class="form-control form-select" id="fType">
+                            <option value="dedicated">Dedicated</option>
+                            <option value="shared">Shared</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Primary Handler?</label>
+                        <select class="form-control form-select" id="fPrimary">
+                            <option value="true">Yes – Primary</option>
+                            <option value="false">No – Secondary</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+                <button class="btn btn-primary" id="saveBtn">Save Assignment</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/api.js"></script>
+    <script>
+        let assignments = [];
+
+        async function loadData() {
+            const [{ data: emps }, { data: brands }, { data: asgns }] = await Promise.all([
+                API.getEmployees({ isActive: true }),
+                API.getBrands(),
+                API.getAssignments()
+            ]);
+            assignments = asgns;
+            document.getElementById('fEmp').innerHTML = emps.map(e => `<option value="${e._id}">${e.name} (${e.empId})</option>`).join('');
+            document.getElementById('fBrand').innerHTML = brands.map(b => `<option value="${b._id}">${b.name} (${b.brandCode})</option>`).join('');
+            renderTable(assignments);
+        }
+
+        function renderTable(data) {
+            document.getElementById('countBadge').textContent = data.length;
+            const tbody = document.getElementById('assignTable');
+            if (!data.length) { tbody.innerHTML = `<tr><td colspan="6"><div class="empty-state"><div class="icon">🔗</div><h5>No assignments found</h5></div></td></tr>`; return; }
+            tbody.innerHTML = data.map(a => `
+        <tr>
+          <td><div class="d-flex align-center gap-8"><div class="avatar" style="width:26px;height:26px;font-size:10px">${getInitials(a.employee?.name || '?')}</div>${a.employee?.name || '–'} <span class="text-muted">(${a.employee?.empId || ''})</span></div></td>
+          <td><strong>${a.brand?.name || '–'}</strong> <span class="badge badge-primary" style="font-size:10px">${a.brand?.brandCode || ''}</span></td>
+          <td>${(a.processes || []).map(p => `<span class="badge badge-info" style="margin:1px">${p}</span>`).join('')}</td>
+          <td><span class="badge ${a.assignmentType === 'dedicated' ? 'badge-dedicated' : 'badge-shared'}">${a.assignmentType}</span></td>
+          <td>${a.isPrimary ? '<span class="badge badge-success">Primary</span>' : '<span class="text-muted">Secondary</span>'}</td>
+          <td><button class="btn btn-sm btn-danger" onclick="removeAssign('${a._id}')">🗑️ Remove</button></td>
+        </tr>`).join('');
+        }
+
+        function filterData() {
+            const q = document.getElementById('searchInput').value.toLowerCase();
+            const type = document.getElementById('typeFilter').value;
+            renderTable(assignments.filter(a =>
+                (!q || (a.employee?.name || '').toLowerCase().includes(q) || (a.brand?.name || '').toLowerCase().includes(q)) &&
+                (!type || a.assignmentType === type)
+            ));
+        }
+        document.getElementById('searchInput').addEventListener('input', filterData);
+        document.getElementById('typeFilter').addEventListener('change', filterData);
+
+        function openModal() { document.getElementById('assignModal').classList.add('open'); }
+        function closeModal() { document.getElementById('assignModal').classList.remove('open'); document.querySelectorAll('.process-cb').forEach(cb => cb.checked = false); }
+        document.getElementById('addBtn').addEventListener('click', openModal);
+
+        document.getElementById('saveBtn').addEventListener('click', async () => {
+            const processes = [...document.querySelectorAll('.process-cb:checked')].map(cb => cb.value);
+            const payload = {
+                employee: document.getElementById('fEmp').value,
+                brand: document.getElementById('fBrand').value,
+                processes,
+                assignmentType: document.getElementById('fType').value,
+                isPrimary: document.getElementById('fPrimary').value === 'true'
+            };
+            try {
+                await API.createAssignment(payload);
+                showToast('Assignment created', 'success');
+                closeModal(); await loadData();
+            } catch (e) { }
+        });
+
+        async function removeAssign(id) {
+            if (!confirm('Remove this assignment?')) return;
+            await API.deleteAssignment(id);
+            showToast('Assignment removed'); await loadData();
+        }
+
+        loadData();
+    </script>
+</body>
+
+</html>

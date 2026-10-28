@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Employees – Smart Roster Management System</title>
+    <link rel="stylesheet" href="css/style.css" />
+</head>
+
+<body>
+    <aside class="sidebar" id="sidebar"></aside>
+    <div class="main-wrapper">
+        <header class="topbar">
+            <div>
+                <div class="topbar-title">Employees</div>
+                <div class="topbar-subtitle">Manage all employees and their settings</div>
+            </div>
+            <div class="topbar-actions">
+                <button class="btn btn-primary" id="addEmpBtn">+ Add Employee</button>
+            </div>
+        </header>
+        <div class="content">
+            <div class="search-bar">
+                <div class="search-input-wrap">
+                    <span class="icon">🔍</span>
+                    <input type="text" class="form-control" id="searchInput" placeholder="Search employees..." />
+                </div>
+                <select class="form-control form-select" id="podFilter" style="width:160px">
+                    <option value="">All Pods</option>
+                </select>
+                <select class="form-control form-select" id="roleFilter" style="width:130px">
+                    <option value="">All Roles</option>
+                    <option value="agent">Agent</option>
+                    <option value="lead">Lead</option>
+                    <option value="manager">Manager</option>
+                </select>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <h6>👥 Employee List <span class="badge badge-primary" id="countBadge">0</span></h6>
+                </div>
+                <div class="card-body" style="padding:0">
+                    <div class="table-container">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Emp ID</th>
+                                    <th>Name</th>
+                                    <th>Pod</th>
+                                    <th>Role</th>
+                                    <th>Calendar</th>
+                                    <th>Weekly Off</th>
+                                    <th>Status</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="empTable">
+                                <tr>
+                                    <td colspan="8" class="text-center text-muted" style="padding:32px">Loading...</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add/Edit Modal -->
+    <div class="modal-overlay" id="empModal">
+        <div class="modal">
+            <div class="modal-header">
+                <h5 id="modalTitle">Add Employee</h5>
+                <button class="close-btn" onclick="closeModal()">✕</button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="empId" />
+                <div class="grid-2">
+                    <div class="form-group">
+                        <label class="form-label">Employee ID *</label>
+                        <input type="text" class="form-control" id="fEmpId" placeholder="EMP001" />
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Full Name *</label>
+                        <input type="text" class="form-control" id="fName" placeholder="Full Name" />
+                    </div>
+                </div>
+                <div class="grid-2">
+                    <div class="form-group">
+                        <label class="form-label">Email</label>
+                        <input type="email" class="form-control" id="fEmail" placeholder="email@company.com" />
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Phone</label>
+                        <input type="text" class="form-control" id="fPhone" placeholder="9800000000" />
+                    </div>
+                </div>
+                <div class="grid-2">
+                    <div class="form-group">
+                        <label class="form-label">Role</label>
+                        <select class="form-control form-select" id="fRole">
+                            <option value="agent">Agent</option>
+                            <option value="lead">Lead</option>
+                            <option value="manager">Manager</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Pod</label>
+                        <select class="form-control form-select" id="fPod"></select>
+                    </div>
+                </div>
+                <div class="grid-2">
+                    <div class="form-group">
+                        <label class="form-label">Working Calendar</label>
+                        <select class="form-control form-select" id="fCalendar">
+                            <option value="365">365 Days</option>
+                            <option value="mon-sat">Mon–Sat (Sunday Off)</option>
+                            <option value="holidays-off">Public Holidays Off</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Weekly Off Day</label>
+                        <select class="form-control form-select" id="fWeeklyOff">
+                            <option value="Sunday">Sunday</option>
+                            <option value="Saturday">Saturday</option>
+                            <option value="Monday">Monday</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+                <button class="btn btn-primary" id="saveBtn">Save Employee</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/api.js"></script>
+    <script>
+        let employees = [], pods = [];
+
+        async function loadData() {
+            [{ data: employees }, { data: pods }] = await Promise.all([
+                API.getEmployees(),
+                API.getPods()
+            ]);
+            populatePodFilter();
+            renderTable(employees);
+        }
+
+        function populatePodFilter() {
+            const filter = document.getElementById('podFilter');
+            const fPod = document.getElementById('fPod');
+            pods.forEach(p => {
+                filter.innerHTML += `<option value="${p._id}">${p.name}</option>`;
+                fPod.innerHTML += `<option value="${p._id}">${p.name}</option>`;
+            });
+        }
+
+        function renderTable(data) {
+            document.getElementById('countBadge').textContent = data.length;
+            const tbody = document.getElementById('empTable');
+            if (!data.length) {
+                tbody.innerHTML = `<tr><td colspan="8"><div class="empty-state"><div class="icon">👥</div><h5>No employees found</h5></div></td></tr>`;
+                return;
+            }
+            tbody.innerHTML = data.map(e => `
+        <tr>
+          <td><span class="badge badge-primary">${e.empId}</span></td>
+          <td><div class="d-flex align-center gap-8"><div class="avatar">${getInitials(e.name)}</div><div><div style="font-weight:600">${e.name}</div><div class="text-muted" style="font-size:11px">${e.email || ''}</div></div></div></td>
+          <td>${e.pod?.name || '–'}</td>
+          <td><span class="badge ${e.role === 'lead' ? 'badge-info' : e.role === 'manager' ? 'badge-danger' : 'badge-primary'}">${e.role}</span></td>
+          <td>${{ '365': '365 Days', 'mon-sat': 'Mon–Sat', 'holidays-off': 'Hols Off' }[e.workingCalendar] || e.workingCalendar}</td>
+          <td>${e.weeklyOffDay || 'Sunday'}</td>
+          <td><span class="badge ${e.isActive ? 'badge-success' : 'badge-danger'}">${e.isActive ? 'Active' : 'Inactive'}</span></td>
+          <td>
+            <button class="btn btn-sm btn-secondary" onclick="editEmp('${e._id}')">✏️</button>
+            <button class="btn btn-sm btn-danger" onclick="deleteEmp('${e._id}')">🗑️</button>
+          </td>
+        </tr>`).join('');
+        }
+
+        // Search / filter
+        function filterData() {
+            const q = document.getElementById('searchInput').value.toLowerCase();
+            const pod = document.getElementById('podFilter').value;
+            const role = document.getElementById('roleFilter').value;
+            const filtered = employees.filter(e => {
+                const matchQ = !q || e.name.toLowerCase().includes(q) || e.empId.toLowerCase().includes(q);
+                const matchPod = !pod || e.pod?._id === pod;
+                const matchRole = !role || e.role === role;
+                return matchQ && matchPod && matchRole;
+            });
+            renderTable(filtered);
+        }
+        document.getElementById('searchInput').addEventListener('input', filterData);
+        document.getElementById('podFilter').addEventListener('change', filterData);
+        document.getElementById('roleFilter').addEventListener('change', filterData);
+
+        // Modal
+        function openModal(title = 'Add Employee') {
+            document.getElementById('modalTitle').textContent = title;
+            document.getElementById('empModal').classList.add('open');
+        }
+        function closeModal() {
+            document.getElementById('empModal').classList.remove('open');
+            document.getElementById('empId').value = '';
+            ['fEmpId', 'fName', 'fEmail', 'fPhone'].forEach(id => document.getElementById(id).value = '');
+            document.getElementById('fRole').value = 'agent';
+            document.getElementById('fCalendar').value = 'mon-sat';
+        }
+
+        document.getElementById('addEmpBtn').addEventListener('click', () => {
+            closeModal(); openModal('Add Employee');
+        });
+
+        function editEmp(id) {
+            const e = employees.find(emp => emp._id === id);
+            if (!e) return;
+            document.getElementById('empId').value = e._id;
+            document.getElementById('fEmpId').value = e.empId;
+            document.getElementById('fName').value = e.name;
+            document.getElementById('fEmail').value = e.email || '';
+            document.getElementById('fPhone').value = e.phone || '';
+            document.getElementById('fRole').value = e.role;
+            document.getElementById('fPod').value = e.pod?._id || '';
+            document.getElementById('fCalendar').value = e.workingCalendar;
+            document.getElementById('fWeeklyOff').value = e.weeklyOffDay || 'Sunday';
+            openModal('Edit Employee');
+        }
+
+        document.getElementById('saveBtn').addEventListener('click', async () => {
+            const id = document.getElementById('empId').value;
+            const payload = {
+                empId: document.getElementById('fEmpId').value,
+                name: document.getElementById('fName').value,
+                email: document.getElementById('fEmail').value,
+                phone: document.getElementById('fPhone').value,
+                role: document.getElementById('fRole').value,
+                pod: document.getElementById('fPod').value || undefined,
+                workingCalendar: document.getElementById('fCalendar').value,
+                weeklyOffDay: document.getElementById('fWeeklyOff').value
+            };
+            try {
+                if (id) await API.updateEmployee(id, payload);
+                else await API.createEmployee(payload);
+                showToast(id ? 'Employee updated' : 'Employee added', 'success');
+                closeModal();
+                await loadData();
+            } catch (e) { }
+        });
+
+        async function deleteEmp(id) {
+            if (!confirm('Deactivate this employee?')) return;
+            await API.deleteEmployee(id);
+            showToast('Employee deactivated', 'success');
+            await loadData();
+        }
+
+        loadData();
+    </script>
+</body>
+
+</html>

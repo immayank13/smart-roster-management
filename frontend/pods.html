@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Pods – Smart Roster Management System</title>
+    <link rel="stylesheet" href="css/style.css" />
+</head>
+
+<body>
+    <aside class="sidebar" id="sidebar"></aside>
+    <div class="main-wrapper">
+        <header class="topbar">
+            <div>
+                <div class="topbar-title">Pods</div>
+                <div class="topbar-subtitle">Manage operational pods and their leads</div>
+            </div>
+            <div class="topbar-actions"><button class="btn btn-primary" id="addPodBtn">+ Add Pod</button></div>
+        </header>
+        <div class="content">
+            <div id="podGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:18px">
+                <div class="empty-state">
+                    <div class="icon">📦</div>
+                    <h5>Loading...</h5>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="podModal">
+        <div class="modal">
+            <div class="modal-header">
+                <h5 id="modalTitle">Add Pod</h5><button class="close-btn" onclick="closeModal()">✕</button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="podId" />
+                <div class="form-group"><label class="form-label">Pod Name *</label><input type="text"
+                        class="form-control" id="fName" placeholder="Pod Alpha" /></div>
+                <div class="form-group"><label class="form-label">Description</label><input type="text"
+                        class="form-control" id="fDesc" placeholder="Brief description..." /></div>
+                <div class="form-group">
+                    <label class="form-label">Pod Lead</label>
+                    <select class="form-control form-select" id="fLead">
+                        <option value="">No Lead Assigned</option>
+                    </select>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+                <button class="btn btn-primary" id="saveBtn">Save Pod</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/api.js"></script>
+    <script>
+        let pods = [], employees = [];
+
+        const COLORS = ['#6366f1', '#8b5cf6', '#06b6d4', '#10b981', '#f59e0b', '#ef4444'];
+
+        async function loadData() {
+            [{ data: pods }, { data: employees }] = await Promise.all([API.getPods(), API.getEmployees({ isActive: true })]);
+            const fLead = document.getElementById('fLead');
+            fLead.innerHTML = '<option value="">No Lead Assigned</option>' +
+                employees.filter(e => e.role === 'lead').map(e => `<option value="${e._id}">${e.name}</option>`).join('');
+            renderPods();
+        }
+
+        async function getEmpCount(podId) {
+            try {
+                const res = await API.getEmployees({ pod: podId });
+                return res.data.length;
+            } catch { return 0; }
+        }
+
+        async function renderPods() {
+            const grid = document.getElementById('podGrid');
+            if (!pods.length) {
+                grid.innerHTML = `<div class="empty-state"><div class="icon">📦</div><h5>No pods found</h5></div>`;
+                return;
+            }
+
+            const counts = await Promise.all(pods.map(p => getEmpCount(p._id)));
+
+            grid.innerHTML = pods.map((p, i) => `
+        <div class="card" style="border-top:4px solid ${COLORS[i % COLORS.length]}">
+          <div class="card-body">
+            <div class="d-flex align-center gap-12 mb-16">
+              <div class="stat-icon" style="background:${COLORS[i % COLORS.length]}22;width:44px;height:44px;border-radius:12px">
+                <span style="font-size:22px">📦</span>
+              </div>
+              <div>
+                <div style="font-size:15px;font-weight:700">${p.name}</div>
+                <div class="text-muted" style="font-size:12px">${p.description || 'No description'}</div>
+              </div>
+            </div>
+            <div class="d-flex align-center gap-12">
+              <div style="flex:1;text-align:center;padding:10px;background:var(--bg);border-radius:8px">
+                <div style="font-size:20px;font-weight:800">${counts[i]}</div>
+                <div style="font-size:11px;color:var(--text-muted)">Employees</div>
+              </div>
+              <div style="flex:1;text-align:center;padding:10px;background:var(--bg);border-radius:8px">
+                <div style="font-size:13px;font-weight:700">${p.lead?.name || '–'}</div>
+                <div style="font-size:11px;color:var(--text-muted)">Pod Lead</div>
+              </div>
+            </div>
+            <div class="d-flex gap-8" style="margin-top:14px">
+              <button class="btn btn-sm btn-secondary" style="flex:1" onclick="editPod('${p._id}')">✏️ Edit</button>
+            </div>
+          </div>
+        </div>`).join('');
+        }
+
+        function openModal(title) { document.getElementById('modalTitle').textContent = title; document.getElementById('podModal').classList.add('open'); }
+        function closeModal() { document.getElementById('podModal').classList.remove('open'); document.getElementById('podId').value = ''; document.getElementById('fName').value = ''; document.getElementById('fDesc').value = ''; }
+
+        document.getElementById('addPodBtn').addEventListener('click', () => { closeModal(); openModal('Add Pod'); });
+
+        function editPod(id) {
+            const p = pods.find(x => x._id === id);
+            if (!p) return;
+            document.getElementById('podId').value = p._id;
+            document.getElementById('fName').value = p.name;
+            document.getElementById('fDesc').value = p.description || '';
+            document.getElementById('fLead').value = p.lead?._id || '';
+            openModal('Edit Pod');
+        }
+
+        document.getElementById('saveBtn').addEventListener('click', async () => {
+            const id = document.getElementById('podId').value;
+            const payload = {
+                name: document.getElementById('fName').value,
+                description: document.getElementById('fDesc').value,
+                lead: document.getElementById('fLead').value || undefined
+            };
+            try {
+                if (id) await API.updatePod(id, payload); else await API.createPod(payload);
+                showToast(id ? 'Pod updated' : 'Pod created', 'success');
+                closeModal(); await loadData();
+            } catch (e) { }
+        });
+
+        loadData();
+    </script>
+</body>
+
+</html>

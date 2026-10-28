@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Brands – Smart Roster Management System</title>
+    <link rel="stylesheet" href="css/style.css" />
+</head>
+
+<body>
+    <aside class="sidebar" id="sidebar"></aside>
+    <div class="main-wrapper">
+        <header class="topbar">
+            <div>
+                <div class="topbar-title">Brands</div>
+                <div class="topbar-subtitle">Manage brand configurations and operational calendars</div>
+            </div>
+            <div class="topbar-actions">
+                <button class="btn btn-primary" id="addBrandBtn">+ Add Brand</button>
+            </div>
+        </header>
+        <div class="content">
+            <div class="search-bar">
+                <div class="search-input-wrap">
+                    <span class="icon">🔍</span>
+                    <input type="text" class="form-control" id="searchInput" placeholder="Search brands..." />
+                </div>
+                <select class="form-control form-select" id="typeFilter" style="width:160px">
+                    <option value="">All Types</option>
+                    <option value="dedicated">Dedicated</option>
+                    <option value="shared">Shared</option>
+                </select>
+                <select class="form-control form-select" id="calFilter" style="width:170px">
+                    <option value="">All Calendars</option>
+                    <option value="365">365 Days</option>
+                    <option value="mon-sat">Mon–Sat</option>
+                    <option value="holidays-off">Holidays Off</option>
+                </select>
+            </div>
+
+            <div class="stat-grid" style="grid-template-columns:repeat(3,1fr);margin-bottom:20px">
+                <div class="stat-card">
+                    <div class="stat-icon" style="background:#e0e7ff">🏷️</div>
+                    <div class="stat-info">
+                        <div class="value" id="totalBrands">–</div>
+                        <div class="label">Total Brands</div>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon" style="background:#d1fae5">🔒</div>
+                    <div class="stat-info">
+                        <div class="value" id="dedicatedBrands">–</div>
+                        <div class="label">Dedicated (80%)</div>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon" style="background:#fce7f3">🤝</div>
+                    <div class="stat-info">
+                        <div class="value" id="sharedBrands">–</div>
+                        <div class="label">Shared (20%)</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <h6>🏷️ Brand List</h6>
+                </div>
+                <div class="card-body" style="padding:0">
+                    <div class="table-container">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Code</th>
+                                    <th>Brand</th>
+                                    <th>Category</th>
+                                    <th>Calendar</th>
+                                    <th>Type</th>
+                                    <th>Processes</th>
+                                    <th>Pod</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="brandTable">
+                                <tr>
+                                    <td colspan="8" class="text-center text-muted" style="padding:32px">Loading...</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal -->
+    <div class="modal-overlay" id="brandModal">
+        <div class="modal">
+            <div class="modal-header">
+                <h5 id="modalTitle">Add Brand</h5>
+                <button class="close-btn" onclick="closeModal()">✕</button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="brandId" />
+                <div class="grid-2">
+                    <div class="form-group">
+                        <label class="form-label">Brand Code *</label>
+                        <input type="text" class="form-control" id="fCode" placeholder="BRD001" />
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Brand Name *</label>
+                        <input type="text" class="form-control" id="fName" placeholder="Brand name" />
+                    </div>
+                </div>
+                <div class="grid-2">
+                    <div class="form-group">
+                        <label class="form-label">Category</label>
+                        <input type="text" class="form-control" id="fCategory" placeholder="Fashion, Electronics..." />
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Pod</label>
+                        <select class="form-control form-select" id="fPod"></select>
+                    </div>
+                </div>
+                <div class="grid-2">
+                    <div class="form-group">
+                        <label class="form-label">Operational Calendar</label>
+                        <select class="form-control form-select" id="fCalendar">
+                            <option value="365">365 Days (Always On)</option>
+                            <option value="mon-sat">Mon–Sat (Sunday Off)</option>
+                            <option value="holidays-off">Public Holidays Off</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Assignment Type</label>
+                        <select class="form-control form-select" id="fType">
+                            <option value="dedicated">Dedicated (1 employee)</option>
+                            <option value="shared">Shared (2–3 employees)</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Processes (select multiple)</label>
+                    <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:4px" id="processCheckboxes">
+                        ${['CS','ACC','NDR','RTO','PREP','SOCIAL'].map(p => `
+                        <label
+                            style="display:flex;align-items:center;gap:5px;font-size:13px;cursor:pointer;background:var(--bg);padding:5px 10px;border-radius:6px;border:1.5px solid var(--border)">
+                            <input type="checkbox" class="process-cb" value="${p}" /> ${p}
+                        </label>`).join('')}
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+                <button class="btn btn-primary" id="saveBtn">Save Brand</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/api.js"></script>
+    <script>
+        let brands = [], pods = [];
+
+        async function loadData() {
+            [{ data: brands }, { data: pods }] = await Promise.all([API.getBrands(), API.getPods()]);
+            const fPod = document.getElementById('fPod');
+            fPod.innerHTML = '<option value="">No Pod</option>';
+            pods.forEach(p => fPod.innerHTML += `<option value="${p._id}">${p.name}</option>`);
+            renderTable(brands);
+            updateStats(brands);
+        }
+
+        function updateStats(data) {
+            document.getElementById('totalBrands').textContent = data.length;
+            document.getElementById('dedicatedBrands').textContent = data.filter(b => b.assignmentType === 'dedicated').length;
+            document.getElementById('sharedBrands').textContent = data.filter(b => b.assignmentType === 'shared').length;
+        }
+
+        function renderTable(data) {
+            const tbody = document.getElementById('brandTable');
+            if (!data.length) { tbody.innerHTML = `<tr><td colspan="8"><div class="empty-state"><div class="icon">🏷️</div><h5>No brands found</h5></div></td></tr>`; return; }
+            tbody.innerHTML = data.map(b => `
+        <tr>
+          <td><span class="badge badge-primary">${b.brandCode}</span></td>
+          <td><strong>${b.name}</strong></td>
+          <td><span class="text-secondary">${b.category || '–'}</span></td>
+          <td><span class="badge ${b.operationalCalendar === '365' ? 'badge-danger' : 'badge-info'}">${{ '365': '365D', 'mon-sat': 'Mon–Sat', 'holidays-off': 'Hols Off' }[b.operationalCalendar]}</span></td>
+          <td><span class="badge ${b.assignmentType === 'dedicated' ? 'badge-dedicated' : 'badge-shared'}">${b.assignmentType}</span></td>
+          <td>${(b.processes || []).map(p => `<span class="badge badge-primary" style="margin:1px">${p}</span>`).join('')}</td>
+          <td>${b.pod?.name || '–'}</td>
+          <td>
+            <button class="btn btn-sm btn-secondary" onclick="editBrand('${b._id}')">✏️</button>
+            <button class="btn btn-sm btn-danger" onclick="deleteBrand('${b._id}')">🗑️</button>
+          </td>
+        </tr>`).join('');
+        }
+
+        function filterData() {
+            const q = document.getElementById('searchInput').value.toLowerCase();
+            const type = document.getElementById('typeFilter').value;
+            const cal = document.getElementById('calFilter').value;
+            renderTable(brands.filter(b =>
+                (!q || b.name.toLowerCase().includes(q) || b.brandCode.toLowerCase().includes(q)) &&
+                (!type || b.assignmentType === type) &&
+                (!cal || b.operationalCalendar === cal)
+            ));
+        }
+        document.getElementById('searchInput').addEventListener('input', filterData);
+        document.getElementById('typeFilter').addEventListener('change', filterData);
+        document.getElementById('calFilter').addEventListener('change', filterData);
+
+        function openModal(title) { document.getElementById('modalTitle').textContent = title; document.getElementById('brandModal').classList.add('open'); }
+        function closeModal() { document.getElementById('brandModal').classList.remove('open'); document.getElementById('brandId').value = ''; document.querySelectorAll('.process-cb').forEach(cb => cb.checked = false); }
+        document.getElementById('addBrandBtn').addEventListener('click', () => { closeModal(); openModal('Add Brand'); });
+
+        function editBrand(id) {
+            const b = brands.find(x => x._id === id);
+            if (!b) return;
+            document.getElementById('brandId').value = b._id;
+            document.getElementById('fCode').value = b.brandCode;
+            document.getElementById('fName').value = b.name;
+            document.getElementById('fCategory').value = b.category || '';
+            document.getElementById('fPod').value = b.pod?._id || '';
+            document.getElementById('fCalendar').value = b.operationalCalendar;
+            document.getElementById('fType').value = b.assignmentType;
+            document.querySelectorAll('.process-cb').forEach(cb => cb.checked = (b.processes || []).includes(cb.value));
+            openModal('Edit Brand');
+        }
+
+        document.getElementById('saveBtn').addEventListener('click', async () => {
+            const id = document.getElementById('brandId').value;
+            const processes = [...document.querySelectorAll('.process-cb:checked')].map(cb => cb.value);
+            const payload = {
+                brandCode: document.getElementById('fCode').value,
+                name: document.getElementById('fName').value,
+                category: document.getElementById('fCategory').value,
+                pod: document.getElementById('fPod').value || undefined,
+                operationalCalendar: document.getElementById('fCalendar').value,
+                assignmentType: document.getElementById('fType').value,
+                processes
+            };
+            try {
+                if (id) await API.updateBrand(id, payload); else await API.createBrand(payload);
+                showToast(id ? 'Brand updated' : 'Brand created', 'success');
+                closeModal(); await loadData();
+            } catch (e) { }
+        });
+
+        async function deleteBrand(id) {
+            if (!confirm('Deactivate this brand?')) return;
+            await API.deleteBrand(id);
+            showToast('Brand deactivated'); await loadData();
+        }
+
+        loadData();
+    </script>
+</body>
+
+</html>

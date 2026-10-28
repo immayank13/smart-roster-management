@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Holidays – Smart Roster Management System</title>
+    <link rel="stylesheet" href="css/style.css" />
+</head>
+
+<body>
+    <aside class="sidebar" id="sidebar"></aside>
+    <div class="main-wrapper">
+        <header class="topbar">
+            <div>
+                <div class="topbar-title">Holiday Calendar</div>
+                <div class="topbar-subtitle">Manage public and regional holidays</div>
+            </div>
+            <div class="topbar-actions">
+                <select class="form-control form-select" id="yearFilter" style="width:100px"></select>
+                <button class="btn btn-primary" id="addBtn">+ Add Holiday</button>
+            </div>
+        </header>
+        <div class="content">
+            <div class="card">
+                <div class="card-header">
+                    <h6>🎉 Holiday List <span class="badge badge-primary" id="countBadge">0</span></h6>
+                </div>
+                <div class="card-body" style="padding:0">
+                    <div class="table-container">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Day</th>
+                                    <th>Holiday</th>
+                                    <th>Type</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="holidayTable">
+                                <tr>
+                                    <td colspan="5" class="text-center text-muted" style="padding:32px">Loading...</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="holidayModal">
+        <div class="modal">
+            <div class="modal-header">
+                <h5>Add Holiday</h5><button class="close-btn" onclick="closeModal()">✕</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group"><label class="form-label">Date *</label><input type="date" class="form-control"
+                        id="fDate" /></div>
+                <div class="form-group"><label class="form-label">Holiday Name *</label><input type="text"
+                        class="form-control" id="fName" placeholder="Republic Day" /></div>
+                <div class="form-group">
+                    <label class="form-label">Type</label>
+                    <select class="form-control form-select" id="fType">
+                        <option value="national">National</option>
+                        <option value="regional">Regional</option>
+                        <option value="optional">Optional</option>
+                    </select>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+                <button class="btn btn-primary" id="saveBtn">Save Holiday</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/api.js"></script>
+    <script>
+        const { year: curYear } = getCurrentMonthYear();
+        const yearFilter = document.getElementById('yearFilter');
+        for (let y = curYear - 1; y <= curYear + 3; y++) {
+            const opt = document.createElement('option');
+            opt.value = y; opt.textContent = y;
+            if (y === curYear) opt.selected = true;
+            yearFilter.appendChild(opt);
+        }
+
+        async function loadHolidays() {
+            const year = yearFilter.value;
+            const { data } = await API.getHolidays({ year });
+            document.getElementById('countBadge').textContent = data.length;
+            const tbody = document.getElementById('holidayTable');
+            if (!data.length) { tbody.innerHTML = `<tr><td colspan="5"><div class="empty-state"><div class="icon">🎉</div><h5>No holidays for ${year}</h5></div></td></tr>`; return; }
+            const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+            tbody.innerHTML = data.map(h => {
+                const d = new Date(h.date);
+                return `<tr>
+          <td><strong>${d.toLocaleDateString('en-IN', { day: '2-digit', month: 'long', year: 'numeric' })}</strong></td>
+          <td>${days[d.getDay()]}</td>
+          <td>${h.name}</td>
+          <td><span class="badge ${h.type === 'national' ? 'badge-danger' : h.type === 'regional' ? 'badge-warning' : 'badge-secondary'}">${h.type}</span></td>
+          <td><button class="btn btn-sm btn-danger" onclick="deleteHoliday('${h._id}')">🗑️</button></td>
+        </tr>`;
+            }).join('');
+        }
+
+        function openModal() { document.getElementById('holidayModal').classList.add('open'); }
+        function closeModal() { document.getElementById('holidayModal').classList.remove('open'); }
+        document.getElementById('addBtn').addEventListener('click', openModal);
+        yearFilter.addEventListener('change', loadHolidays);
+
+        document.getElementById('saveBtn').addEventListener('click', async () => {
+            const date = document.getElementById('fDate').value;
+            const name = document.getElementById('fName').value;
+            if (!date || !name) { showToast('Fill required fields', 'error'); return; }
+            const year = new Date(date).getFullYear();
+            try {
+                await API.createHoliday({ date, name, type: document.getElementById('fType').value, year });
+                showToast('Holiday added', 'success');
+                closeModal(); await loadHolidays();
+            } catch (e) { }
+        });
+
+        async function deleteHoliday(id) {
+            if (!confirm('Delete this holiday?')) return;
+            await API.deleteHoliday(id);
+            showToast('Holiday deleted'); await loadHolidays();
+        }
+
+        loadHolidays();
+    </script>
+</body>
+
+</html>

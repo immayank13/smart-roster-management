@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Roster – Smart Roster Management System</title>
+    <meta name="description" content="View and manage monthly rosters by company, pod, brand, process, and employee." />
+    <link rel="stylesheet" href="css/style.css" />
+    <style>
+        .view-toggle {
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+        }
+
+        .view-btn {
+            padding: 7px 14px;
+            border-radius: 8px;
+            border: 1.5px solid var(--border);
+            background: #fff;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            color: var(--text-secondary);
+            transition: all 0.2s;
+        }
+
+        .view-btn.active {
+            background: var(--primary);
+            color: #fff;
+            border-color: var(--primary);
+        }
+
+        .legend {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+            align-items: center;
+            margin-bottom: 14px;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--text-secondary);
+        }
+
+        .legend-box {
+            width: 18px;
+            height: 18px;
+            border-radius: 4px;
+            display: grid;
+            place-items: center;
+            font-size: 9px;
+            font-weight: 700;
+        }
+    </style>
+</head>
+
+<body>
+    <aside class="sidebar" id="sidebar"></aside>
+
+    <div class="main-wrapper">
+        <header class="topbar">
+            <div>
+                <div class="topbar-title">Roster Calendar</div>
+                <div class="topbar-subtitle" id="rosterLabel">Monthly view</div>
+            </div>
+            <div class="topbar-actions">
+                <select class="form-control form-select" id="monthPicker" style="width:130px"></select>
+                <select class="form-control form-select" id="yearPicker" style="width:90px"></select>
+                <button class="btn btn-primary" id="generateBtn">⚡ Generate</button>
+                <button class="btn btn-secondary" id="validateBtn">🔍 Validate</button>
+            </div>
+        </header>
+
+        <div class="content">
+            <!-- View tabs -->
+            <div class="card" style="margin-bottom:20px">
+                <div class="card-body" style="padding:16px">
+                    <div class="d-flex align-center gap-12" style="flex-wrap:wrap;gap:12px">
+                        <div class="view-toggle" id="viewToggle">
+                            <button class="view-btn active" data-view="company">🏢 Company</button>
+                            <button class="view-btn" data-view="pod">📦 Pod</button>
+                            <button class="view-btn" data-view="brand">🏷️ Brand</button>
+                            <button class="view-btn" data-view="process">⚙️ Process</button>
+                            <button class="view-btn" data-view="employee">👤 Employee</button>
+                        </div>
+
+                        <!-- Contextual filters -->
+                        <div id="filterArea" style="display:flex;gap:8px;flex:1;min-width:200px"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Legend -->
+            <div class="legend">
+                <span style="font-size:11px;font-weight:700;color:var(--text-secondary)">Legend:</span>
+                <div class="legend-item">
+                    <div class="legend-box" style="background:#bbf7d0;color:#166534">W</div> Working
+                </div>
+                <div class="legend-item">
+                    <div class="legend-box" style="background:#fde68a;color:#78350f">L</div> Leave
+                </div>
+                <div class="legend-item">
+                    <div class="legend-box" style="background:#c7d2fe;color:#3730a3">O</div> Weekly Off
+                </div>
+                <div class="legend-item">
+                    <div class="legend-box" style="background:#fbcfe8;color:#831843">H</div> Holiday
+                </div>
+                <div class="legend-item">
+                    <div class="legend-box" style="background:#fca5a5;color:#7f1d1d">!</div> Conflict
+                </div>
+                <div class="legend-item">
+                    <div class="legend-box" style="background:#e2e8f0;color:#94a3b8">-</div> Unassigned
+                </div>
+            </div>
+
+            <!-- Roster Grid -->
+            <div class="card">
+                <div class="card-body" style="padding:0;position:relative">
+                    <div id="loadingOverlay" class="loading-overlay" style="display:none">
+                        <div class="spinner"></div>
+                    </div>
+                    <div class="roster-grid" id="rosterContainer">
+                        <div class="empty-state">
+                            <div class="icon">📅</div>
+                            <h5>No roster data</h5>
+                            <p>Click Generate to create a roster for this month</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Entry Modal -->
+    <div class="modal-overlay" id="editModal">
+        <div class="modal">
+            <div class="modal-header">
+                <h5>✏️ Edit Roster Entry</h5>
+                <button class="close-btn" onclick="closeModal()">✕</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label class="form-label">Status</label>
+                    <select class="form-control form-select" id="editStatus">
+                        <option value="working">Working</option>
+                        <option value="leave">Leave</option>
+                        <option value="weekly-off">Weekly Off</option>
+                        <option value="holiday">Holiday</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Notes</label>
+                    <input type="text" class="form-control" id="editNotes" placeholder="Optional notes..." />
+                </div>
+                <p style="font-size:11px;color:var(--text-muted)">⚠️ Manual edits override auto-generated entries. Run
+                    Validate to check conflicts.</p>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+                <button class="btn btn-primary" id="saveEditBtn">Save Changes</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/api.js"></script>
+    <script>
+        let currentView = 'company';
+        let selectedEntity = null;
+        let editingEntryId = null;
+        let rosterData = [];
+
+        const { year: curYear, month: curMonth } = getCurrentMonthYear();
+
+        // Setup pickers
+        const monthPicker = document.getElementById('monthPicker');
+        const yearPicker = document.getElementById('yearPicker');
+        MONTH_NAMES.slice(1).forEach((m, i) => {
+            const opt = document.createElement('option');
+            opt.value = i + 1; opt.textContent = m;
+            if (i + 1 === curMonth) opt.selected = true;
+            monthPicker.appendChild(opt);
+        });
+        for (let y = curYear - 1; y <= curYear + 2; y++) {
+            const opt = document.createElement('option');
+            opt.value = y; opt.textContent = y;
+            if (y === curYear) opt.selected = true;
+            yearPicker.appendChild(opt);
+        }
+
+        function getSelected() {
+            return { year: parseInt(yearPicker.value), month: parseInt(monthPicker.value) };
+        }
+
+        function showLoading(show) {
+            document.getElementById('loadingOverlay').style.display = show ? 'flex' : 'none';
+        }
+
+        // ─── View toggle ─────────────────────────────────────────────────────────
+        document.getElementById('viewToggle').addEventListener('click', async e => {
+            const btn = e.target.closest('.view-btn');
+            if (!btn) return;
+            document.querySelectorAll('.view-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            currentView = btn.dataset.view;
+            selectedEntity = null;
+            await updateFilterArea();
+        });
+
+        async function updateFilterArea() {
+            const filterArea = document.getElementById('filterArea');
+            const { year, month } = getSelected();
+
+            if (currentView === 'company') {
+                filterArea.innerHTML = '';
+                await loadRoster();
+            } else if (currentView === 'pod') {
+                const pods = (await API.getPods()).data;
+                filterArea.innerHTML = `<select class="form-control form-select" id="entitySelect" style="flex:1">
+          <option value="">Select Pod</option>
+          ${pods.map(p => `<option value="${p._id}">${p.name}</option>`).join('')}
+        </select>`;
+                document.getElementById('entitySelect').addEventListener('change', e => {
+                    selectedEntity = e.target.value; if (selectedEntity) loadRoster();
+                });
+            } else if (currentView === 'brand') {
+                const brands = (await API.getBrands()).data;
+                filterArea.innerHTML = `<select class="form-control form-select" id="entitySelect" style="flex:1">
+          <option value="">Select Brand</option>
+          ${brands.map(b => `<option value="${b._id}">${b.name}</option>`).join('')}
+        </select>`;
+                document.getElementById('entitySelect').addEventListener('change', e => {
+                    selectedEntity = e.target.value; if (selectedEntity) loadRoster();
+                });
+            } else if (currentView === 'process') {
+                const processes = ['CS', 'ACC', 'NDR', 'RTO', 'PREP', 'SOCIAL'];
+                filterArea.innerHTML = `<select class="form-control form-select" id="entitySelect" style="flex:1">
+          <option value="">All Processes</option>
+          ${processes.map(p => `<option value="${p}">${p}</option>`).join('')}
+        </select>`;
+                document.getElementById('entitySelect').addEventListener('change', e => {
+                    selectedEntity = e.target.value; loadRoster();
+                });
+                loadRoster();
+            } else if (currentView === 'employee') {
+                const emps = (await API.getEmployees({ isActive: true })).data;
+                filterArea.innerHTML = `<select class="form-control form-select" id="entitySelect" style="flex:1">
+          <option value="">Select Employee</option>
+          ${emps.map(e => `<option value="${e._id}">${e.name} (${e.empId})</option>`).join('')}
+        </select>`;
+                document.getElementById('entitySelect').addEventListener('change', e => {
+                    selectedEntity = e.target.value; if (selectedEntity) loadRoster();
+                });
+            }
+        }
+
+        async function loadRoster() {
+            const { year, month } = getSelected();
+            document.getElementById('rosterLabel').textContent = `${MONTH_NAMES[month]} ${year}`;
+            showLoading(true);
+            try {
+                let entries = [];
+                if (currentView === 'company') {
+                    entries = (await API.getCompanyView(year, month)).data;
+                } else if (currentView === 'pod' && selectedEntity) {
+                    entries = (await API.getPodView(selectedEntity, year, month)).data;
+                } else if (currentView === 'brand' && selectedEntity) {
+                    entries = (await API.getBrandView(selectedEntity, year, month)).data;
+                } else if (currentView === 'process') {
+                    entries = (await API.getProcessView(year, month, selectedEntity || '')).data;
+                } else if (currentView === 'employee' && selectedEntity) {
+                    entries = (await API.getEmployeeView(selectedEntity, year, month)).data;
+                } else {
+                    showLoading(false);
+                    return;
+                }
+                rosterData = entries;
+                renderRosterGrid(entries, year, month);
+            } catch (e) {
+                document.getElementById('rosterContainer').innerHTML = `<div class="empty-state"><div class="icon">❌</div><h5>Failed to load roster</h5><p>${e.message}</p></div>`;
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        function renderRosterGrid(entries, year, month) {
+            const container = document.getElementById('rosterContainer');
+            if (!entries.length) {
+                container.innerHTML = `<div class="empty-state"><div class="icon">📅</div><h5>No roster data for this month</h5><p>Click Generate to create the roster</p></div>`;
+                return;
+            }
+
+            const days = getDaysInMonth(year, month);
+            const today = new Date();
+
+            // Group by employee
+            const empMap = {};
+            entries.forEach(e => {
+                if (!e.employee) return;
+                const empId = e.employee._id || e.employee;
+                const empName = e.employee.name || 'Unknown';
+                if (!empMap[empId]) empMap[empId] = { name: empName, days: {} };
+                const d = new Date(e.date).getDate();
+                if (!empMap[empId].days[d]) empMap[empId].days[d] = [];
+                empMap[empId].days[d].push(e);
+            });
+
+            // Build header
+            let html = `<table class="roster-table">
+        <thead><tr>
+          <th class="emp-col">Employee</th>`;
+            for (let d = 1; d <= days; d++) {
+                const date = new Date(year, month - 1, d);
+                const dayName = getDayName(date);
+                const isToday = date.getFullYear() === today.getFullYear() && date.getMonth() === today.getMonth() && date.getDate() === today.getDate();
+                const isSun = date.getDay() === 0;
+                html += `<th class="day-col-header ${isSun ? 'sunday' : ''} ${isToday ? 'today' : ''}">
+          <span class="day-num">${d}</span>
+          <span class="day-name">${dayName}</span>
+        </th>`;
+            }
+            html += `</tr></thead><tbody>`;
+
+            // Build rows
+            Object.entries(empMap).forEach(([empId, empData]) => {
+                html += `<tr>
+          <td class="emp-col">
+            <div class="d-flex align-center gap-8">
+              <div class="avatar" style="width:26px;height:26px;font-size:10px">${getInitials(empData.name)}</div>
+              <span style="font-size:12px">${empData.name}</span>
+            </div>
+          </td>`;
+                for (let d = 1; d <= days; d++) {
+                    const dayEntries = empData.days[d] || [];
+                    if (dayEntries.length === 0) {
+                        html += `<td><div class="roster-cell unassigned">–</div></td>`;
+                    } else {
+                        // Use first entry's status (deduplicate)
+                        const entry = dayEntries[0];
+                        const status = entry.status || 'unassigned';
+                        const hasConflict = entry.conflicts && entry.conflicts.length > 0;
+                        const displayStatus = hasConflict ? 'conflict' : status;
+                        const label = STATUS_LABELS[displayStatus] || '?';
+                        const tooltip = hasConflict ? entry.conflicts[0]?.message : (entry.notes || status);
+                        html += `<td>
+              <div class="roster-cell ${displayStatus}" 
+                   title="${tooltip}"
+                   data-entry-id="${entry._id}"
+                   data-status="${entry.status}"
+                   data-notes="${entry.notes || ''}"
+                   onclick="openEditModal(this)">
+                ${label}
+              </div>
+            </td>`;
+                    }
+                }
+                html += `</tr>`;
+            });
+
+            html += `</tbody></table>`;
+            container.innerHTML = html;
+        }
+
+        // ─── Edit Modal ──────────────────────────────────────────────────────────
+        function openEditModal(cell) {
+            editingEntryId = cell.dataset.entryId;
+            document.getElementById('editStatus').value = cell.dataset.status;
+            document.getElementById('editNotes').value = cell.dataset.notes;
+            document.getElementById('editModal').classList.add('open');
+        }
+        function closeModal() {
+            document.getElementById('editModal').classList.remove('open');
+            editingEntryId = null;
+        }
+        document.getElementById('saveEditBtn').addEventListener('click', async () => {
+            if (!editingEntryId) return;
+            const status = document.getElementById('editStatus').value;
+            const notes = document.getElementById('editNotes').value;
+            try {
+                await API.updateRosterEntry(editingEntryId, { status, notes });
+                showToast('Entry updated', 'success');
+                closeModal();
+                await loadRoster();
+            } catch (e) { }
+        });
+
+        // ─── Generate & Validate ─────────────────────────────────────────────────
+        document.getElementById('generateBtn').addEventListener('click', async () => {
+            const { year, month } = getSelected();
+            const btn = document.getElementById('generateBtn');
+            btn.disabled = true; btn.textContent = '⏳ Generating...';
+            try {
+                const res = await API.generateRoster(year, month);
+                showToast(`Roster generated! ${res.data.conflicts} conflicts found`, res.data.conflicts > 0 ? 'warning' : 'success');
+                await loadRoster();
+            } finally { btn.disabled = false; btn.textContent = '⚡ Generate'; }
+        });
+
+        document.getElementById('validateBtn').addEventListener('click', async () => {
+            const { year, month } = getSelected();
+            try {
+                const res = await API.validateRoster(year, month);
+                if (res.data.length === 0) {
+                    showToast('✅ No conflicts found! Roster is valid.', 'success');
+                } else {
+                    showToast(`⚠️ ${res.data.length} conflict(s) found`, 'warning');
+                }
+            } catch (e) { }
+        });
+
+        document.getElementById('monthPicker').addEventListener('change', loadRoster);
+        document.getElementById('yearPicker').addEventListener('change', loadRoster);
+
+        document.addEventListener('DOMContentLoaded', async () => {
+            await updateFilterArea();
+        });
+    </script>
+</body>
+
+</html>

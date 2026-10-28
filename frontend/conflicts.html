@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Conflicts – Smart Roster Management System</title>
+    <link rel="stylesheet" href="css/style.css" />
+</head>
+
+<body>
+    <aside class="sidebar" id="sidebar"></aside>
+    <div class="main-wrapper">
+        <header class="topbar">
+            <div>
+                <div class="topbar-title">Conflict Detection</div>
+                <div class="topbar-subtitle">Scheduling conflicts and coverage gaps</div>
+            </div>
+            <div class="topbar-actions">
+                <select class="form-control form-select" id="monthPicker" style="width:130px"></select>
+                <select class="form-control form-select" id="yearPicker" style="width:90px"></select>
+                <button class="btn btn-warning" id="validateBtn">🔍 Re-validate</button>
+            </div>
+        </header>
+        <div class="content">
+            <div class="stat-grid" style="grid-template-columns:repeat(3,1fr);margin-bottom:20px">
+                <div class="stat-card">
+                    <div class="stat-icon" style="background:#fee2e2">🚨</div>
+                    <div class="stat-info">
+                        <div class="value text-danger" id="errorCount">0</div>
+                        <div class="label">Critical Errors</div>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon" style="background:#fef3c7">⚠️</div>
+                    <div class="stat-info">
+                        <div class="value text-warning" id="warnCount">0</div>
+                        <div class="label">Warnings</div>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon" style="background:#d1fae5">✅</div>
+                    <div class="stat-info">
+                        <div class="value text-success" id="resolvedCount">–</div>
+                        <div class="label">Valid Entries</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <h6>🚨 Conflict Details</h6>
+                    <div style="display:flex;gap:8px">
+                        <select class="form-control form-select btn-sm" id="typeFilter" style="width:160px">
+                            <option value="">All Types</option>
+                            <option value="leave-conflict">Leave Conflict</option>
+                            <option value="coverage-gap">Coverage Gap</option>
+                            <option value="off-day-conflict">Off-day Conflict</option>
+                        </select>
+                        <select class="form-control form-select btn-sm" id="severityFilter" style="width:140px">
+                            <option value="">All Severities</option>
+                            <option value="error">Error</option>
+                            <option value="warning">Warning</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="card-body" id="conflictBody">
+                    <div class="empty-state">
+                        <div class="icon">🔍</div>
+                        <h5>No data</h5>
+                        <p>Select a month and click Re-validate</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/api.js"></script>
+    <script>
+        let allConflicts = [];
+        const { year: curYear, month: curMonth } = getCurrentMonthYear();
+
+        const monthPicker = document.getElementById('monthPicker');
+        const yearPicker = document.getElementById('yearPicker');
+        MONTH_NAMES.slice(1).forEach((m, i) => {
+            const opt = document.createElement('option');
+            opt.value = i + 1; opt.textContent = m;
+            if (i + 1 === curMonth) opt.selected = true;
+            monthPicker.appendChild(opt);
+        });
+        for (let y = curYear - 1; y <= curYear + 2; y++) {
+            const opt = document.createElement('option');
+            opt.value = y; opt.textContent = y;
+            if (y === curYear) opt.selected = true;
+            yearPicker.appendChild(opt);
+        }
+
+        function getSelected() {
+            return { year: parseInt(yearPicker.value), month: parseInt(monthPicker.value) };
+        }
+
+        async function loadConflicts() {
+            const { year, month } = getSelected();
+            try {
+                const res = await API.getConflicts(year, month);
+                allConflicts = res.data;
+
+                // Flatten all conflicts
+                const flatConflicts = [];
+                allConflicts.forEach(entry => {
+                    (entry.conflicts || []).forEach(c => {
+                        flatConflicts.push({ ...c, entry });
+                    });
+                });
+
+                const errors = flatConflicts.filter(c => c.severity === 'error').length;
+                const warns = flatConflicts.filter(c => c.severity === 'warning').length;
+                document.getElementById('errorCount').textContent = errors;
+                document.getElementById('warnCount').textContent = warns;
+
+                // Get total entries for resolved calc
+                const summRes = await API.getRosterSummary(year, month);
+                const total = summRes.data.total;
+                const conflCount = summRes.data.conflicts;
+                document.getElementById('resolvedCount').textContent = total > 0 ? total - conflCount : '–';
+
+                renderConflicts(flatConflicts);
+            } catch (e) { }
+        }
+
+        function renderConflicts(conflicts) {
+            const typeF = document.getElementById('typeFilter').value;
+            const sevF = document.getElementById('severityFilter').value;
+            const filtered = conflicts.filter(c =>
+                (!typeF || c.type === typeF) && (!sevF || c.severity === sevF)
+            );
+
+            const body = document.getElementById('conflictBody');
+            if (!filtered.length) {
+                body.innerHTML = `<div class="empty-state"><div class="icon">✅</div><h5>No conflicts found</h5><p>Roster is valid for this filter</p></div>`;
+                return;
+            }
+
+            body.innerHTML = filtered.map(c => {
+                const isError = c.severity === 'error';
+                const d = new Date(c.entry.date);
+                return `
+          <div class="${isError ? 'conflict-alert' : 'warning-alert'}" style="margin-bottom:10px">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px">
+              <div>
+                <h6>${isError ? '🚨' : '⚠️'} ${(c.type || 'conflict').replace(/-/g, ' ').toUpperCase()}</h6>
+                <p>${c.message}</p>
+              </div>
+              <div style="flex-shrink:0;text-align:right">
+                <span class="badge ${isError ? 'badge-danger' : 'badge-warning'}">${c.severity}</span><br/>
+                <span style="font-size:11px;color:var(--text-muted);margin-top:4px;display:block">
+                  ${d.toLocaleDateString('en-IN', { weekday: 'short', day: '2-digit', month: 'short' })}
+                </span>
+                ${c.entry.employee?.name ? `<span style="font-size:11px;font-weight:600;color:var(--text-secondary)">${c.entry.employee.name}</span>` : ''}
+              </div>
+            </div>
+          </div>`;
+            }).join('');
+        }
+
+        document.getElementById('validateBtn').addEventListener('click', async () => {
+            const { year, month } = getSelected();
+            const btn = document.getElementById('validateBtn');
+            btn.disabled = true; btn.textContent = '⏳ Validating...';
+            try {
+                await API.validateRoster(year, month);
+                await loadConflicts();
+                showToast('Validation complete', 'success');
+            } finally { btn.disabled = false; btn.textContent = '🔍 Re-validate'; }
+        });
+
+        document.getElementById('typeFilter').addEventListener('change', () => {
+            const flat = [];
+            allConflicts.forEach(entry => (entry.conflicts || []).forEach(c => flat.push({ ...c, entry })));
+            renderConflicts(flat);
+        });
+        document.getElementById('severityFilter').addEventListener('change', () => {
+            const flat = [];
+            allConflicts.forEach(entry => (entry.conflicts || []).forEach(c => flat.push({ ...c, entry })));
+            renderConflicts(flat);
+        });
+        monthPicker.addEventListener('change', loadConflicts);
+        yearPicker.addEventListener('change', loadConflicts);
+
+        loadConflicts();
+    </script>
+</body>
+
+</html>
